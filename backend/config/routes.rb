@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   resources :transactions, only: [:index, :create] do
     collection do
       post :bulk_upload
+      patch :bulk_categorize
     end
   end
 end

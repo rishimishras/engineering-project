@@ -1,7 +1,7 @@
 require 'csv'
 
 class TransactionsController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:create, :bulk_upload]
+  skip_before_action :verify_authenticity_token, only: [:create, :bulk_upload, :bulk_categorize]
 
   def index
     transactions = Transaction.all.order(created_at: :desc)
@@ -139,6 +139,23 @@ class TransactionsController < ApplicationController
     rescue StandardError => e
       render json: { error: "Upload failed: #{e.message}" }, status: :internal_server_error
     end
+  end
+
+  def bulk_categorize
+    ids = params[:ids]
+    category = params[:category]
+
+    unless ids.present? && ids.is_a?(Array)
+      return render json: { error: 'No transaction IDs provided' }, status: :unprocessable_entity
+    end
+
+    updated_count = Transaction.where(id: ids).update_all(category: category)
+
+    render json: {
+      success: true,
+      message: "#{updated_count} transaction(s) categorized",
+      updated_count: updated_count
+    }, status: :ok
   end
 
   private

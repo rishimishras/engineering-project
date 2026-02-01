@@ -1,18 +1,9 @@
 import { useState, useEffect } from 'react'
-import Table from './Table'
+import Table, { type Transaction } from './Table'
 import Layout from './Layout'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
-
-interface Transaction {
-  id: number;
-  date: string;
-  description: string;
-  amount: number;
-  category: string;
-  created_at: string;
-  updated_at: string;
-}
+import BulkCategoryModal from './BulkCategoryModal'
 
 export default function Example() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -20,6 +11,8 @@ export default function Example() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkCategoryModalOpen, setIsBulkCategoryModalOpen] = useState(false);
 
   const fetchTransactions = async () => {
     try {
@@ -68,10 +61,24 @@ export default function Example() {
     fetchTransactions();
   };
 
+  const handleOpenBulkCategoryModal = () => {
+    setIsBulkCategoryModalOpen(true);
+  };
+
+  const handleCloseBulkCategoryModal = () => {
+    setIsBulkCategoryModalOpen(false);
+  };
+
+  const handleBulkCategorySuccess = () => {
+    fetchTransactions();
+    setSelectedIds(new Set());
+  };
+
   return (
     <>
       <Layout currentPage="Transactions">
-        <header className="relative bg-white shadow-sm">
+        <header className="sticky top-15 z-50 bg-white shadow-md">
+        {/* <header className="relative bg-white shadow-sm"> */}
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Transactions</h1>
           </div>
@@ -90,6 +97,15 @@ export default function Example() {
             >
               + Bulk Upload(csv file)
             </button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleOpenBulkCategoryModal}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600"
+              >
+                Categorize ({selectedIds.size})
+              </button>
+            )}
           </div>
         </header>
 
@@ -112,6 +128,9 @@ export default function Example() {
                   },
                   { header: 'Category', accessor: 'category' },
                 ]}
+                selectable
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
               />
             )}
           </div>
@@ -129,6 +148,13 @@ export default function Example() {
         isOpen={isBulkUploadModalOpen}
         onClose={handleCloseBulkUploadModal}
         onSuccess={handleBulkUploadSuccess}
+      />
+
+      <BulkCategoryModal
+        isOpen={isBulkCategoryModalOpen}
+        onClose={handleCloseBulkCategoryModal}
+        onSuccess={handleBulkCategorySuccess}
+        selectedIds={selectedIds}
       />
     </>
   )
