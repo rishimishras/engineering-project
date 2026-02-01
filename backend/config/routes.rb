@@ -11,5 +11,9 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   # root "posts#index"
-  resources :transactions, only: [:index, :create]
+  resources :transactions, only: [:index, :create] do
+    collection do
+      post :bulk_upload
+    end
+  end
 end

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Table from './Table'
 import Layout from './Layout'
 import CreateTransactionModal from './CreateTransactionModal'
+import BulkUploadModal from './BulkUploadModal'
 
 interface Transaction {
   id: number;
@@ -18,23 +19,24 @@ export default function Example() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/transactions');
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+      const data = await response.json();
+      setTransactions(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        const response = await fetch('http://localhost:3000/transactions');
-        if (!response.ok) {
-          throw new Error('Failed to fetch transactions');
-        }
-        const data = await response.json();
-        setTransactions(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTransactions();
   }, []);
 
@@ -54,6 +56,18 @@ export default function Example() {
     setError(errorMessage);
   };
 
+  const handleOpenBulkUploadModal = () => {
+    setIsBulkUploadModalOpen(true);
+  };
+
+  const handleCloseBulkUploadModal = () => {
+    setIsBulkUploadModalOpen(false);
+  };
+
+  const handleBulkUploadSuccess = () => {
+    fetchTransactions();
+  };
+
   return (
     <>
       <Layout currentPage="Transactions">
@@ -71,9 +85,10 @@ export default function Example() {
             </button>
             <button
               type="button"
+              onClick={handleOpenBulkUploadModal}
               className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900"
             >
-              + Create Bulk Upload file
+              + Bulk Upload(csv file)
             </button>
           </div>
         </header>
@@ -108,6 +123,12 @@ export default function Example() {
         onClose={handleCloseModal}
         onSuccess={handleTransactionCreated}
         onError={handleError}
+      />
+
+      <BulkUploadModal
+        isOpen={isBulkUploadModalOpen}
+        onClose={handleCloseBulkUploadModal}
+        onSuccess={handleBulkUploadSuccess}
       />
     </>
   )
