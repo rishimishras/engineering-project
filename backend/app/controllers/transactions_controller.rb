@@ -1,5 +1,5 @@
 class TransactionsController < ApplicationController
-  # skip_before_action :verify_authenticity_token, only: [:create] # already present
+  skip_before_action :verify_authenticity_token, only: [:create]
 
   def index
     transactions = Transaction.all.order(created_at: :desc)
