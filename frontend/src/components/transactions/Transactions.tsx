@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import Table, { type Transaction } from './Table'
-import Layout from './Layout'
+import Table, { type Transaction } from './TransactionTable'
+import Layout from '../Layout'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
 import BulkCategoryModal from './BulkCategoryModal'
