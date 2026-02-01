@@ -1,6 +1,0 @@
-date,description,amount,category
-2024-01-15,Valid Transaction,100.50,Test
-01/15/2024,Invalid Date Format,50.00,Test
-2024-01-17,Invalid Amount,not-a-number,Test
-2024-13-45,Impossible Date,75.00,Test
-2024-01-18,Valid Transaction 2,125.99,Test
