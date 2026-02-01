@@ -4,6 +4,7 @@ import Layout from '../Layout'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
 import BulkCategoryModal from './BulkCategoryModal'
+import RulesModal from './RulesModal'
 
 export default function Example() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -13,7 +14,8 @@ export default function Example() {
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkCategoryModalOpen, setIsBulkCategoryModalOpen] = useState(false);
-
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const fetchTransactions = async () => {
     try {
       const response = await fetch('http://localhost:3000/transactions');
@@ -28,9 +30,21 @@ export default function Example() {
       setLoading(false);
     }
   };
+    const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/category_rules/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+    }
+  };
 
   useEffect(() => {
     fetchTransactions();
+    fetchCategories();
   }, []);
 
   const handleOpenModal = () => {
@@ -82,7 +96,7 @@ export default function Example() {
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Transactions</h1>
           </div>
-          <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8 mt-4 flex gap-3">
+          <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8 mt-4 flex gap-3 items-center">
             <button
               type="button"
               onClick={handleOpenModal}
@@ -106,6 +120,13 @@ export default function Example() {
                 Categorize ({selectedIds.size})
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setIsRulesModalOpen(true)}
+              className="ml-auto px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 border border-indigo-600 rounded-md hover:bg-indigo-50"
+            >
+              Category Rules
+            </button>
           </div>
         </header>
 
@@ -142,6 +163,8 @@ export default function Example() {
         onClose={handleCloseModal}
         onSuccess={handleTransactionCreated}
         onError={handleError}
+        categories={categories}
+        onOpenRules={() => setIsRulesModalOpen(true)}
       />
 
       <BulkUploadModal
@@ -155,6 +178,11 @@ export default function Example() {
         onClose={handleCloseBulkCategoryModal}
         onSuccess={handleBulkCategorySuccess}
         selectedIds={selectedIds}
+      />
+      <RulesModal
+        isOpen={isRulesModalOpen}
+        onClose={() => setIsRulesModalOpen(false)}
+        onRulesChange={fetchCategories}
       />
     </>
   )

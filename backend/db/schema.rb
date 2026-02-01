@@ -10,9 +10,23 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_28_195412) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_01_212755) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "category_rules", force: :cascade do |t|
+    t.boolean "active", default: true
+    t.string "category", null: false
+    t.datetime "created_at", null: false
+    t.string "field", null: false
+    t.string "name", null: false
+    t.string "operator", null: false
+    t.integer "priority", default: 0
+    t.datetime "updated_at", null: false
+    t.string "value", null: false
+    t.index ["active"], name: "index_category_rules_on_active"
+    t.index ["priority"], name: "index_category_rules_on_priority"
+  end
 
   create_table "transactions", force: :cascade do |t|
     t.decimal "amount"

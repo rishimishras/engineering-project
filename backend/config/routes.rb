@@ -17,4 +17,11 @@ Rails.application.routes.draw do
       patch :bulk_categorize
     end
   end
+
+  resources :category_rules, only: [:index, :create, :update, :destroy] do
+    collection do
+      get :categories
+      post :apply_to_existing
+    end
+  end
 end

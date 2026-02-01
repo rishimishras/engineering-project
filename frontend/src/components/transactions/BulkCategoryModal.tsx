@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 
 interface BulkCategoryModalProps {
@@ -10,8 +10,27 @@ interface BulkCategoryModalProps {
 
 export default function BulkCategoryModal({ isOpen, onClose, onSuccess, selectedIds }: BulkCategoryModalProps) {
   const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCategories();
+    }
+  }, [isOpen]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/category_rules/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+    }
+  };
 
   const handleCloseModal = () => {
     onClose();
@@ -74,16 +93,21 @@ export default function BulkCategoryModal({ isOpen, onClose, onSuccess, selected
               <label htmlFor="bulk-category" className="block text-sm font-medium text-gray-700">
                 Category
               </label>
-              <input
-                type="text"
+              <select
                 id="bulk-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="Enter category name"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">Clear category</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
               <p className="mt-1 text-xs text-gray-500">
-                Leave empty to clear the category from selected transactions.
+                Select "Clear category" to remove the category from selected transactions.
               </p>
             </div>
 
