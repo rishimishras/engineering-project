@@ -1,59 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-
-interface Rule {
-  id: number;
-  name: string;
-  field: string;
-  operator: string;
-  value: string;
-  category: string;
-  priority: number;
-  active: boolean;
-}
+import EditRule, {
+  type Rule,
+  type RuleFormData,
+  FIELDS,
+  OPERATORS,
+  DEFAULT_CATEGORIES,
+} from './EditRule'
 
 interface RulesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRulesChange: () => void;
-}
-
-const FIELDS = [
-  { value: 'description', label: 'Description' },
-  { value: 'amount', label: 'Amount' },
-];
-
-const OPERATORS: Record<string, { value: string; label: string }[]> = {
-  description: [
-    { value: 'contains', label: 'Contains' },
-    { value: 'equals', label: 'Equals' },
-  ],
-  amount: [
-    { value: 'greater_than', label: 'Greater than' },
-    { value: 'less_than', label: 'Less than' },
-    { value: 'equals', label: 'Equals' },
-  ],
-};
-
-const DEFAULT_CATEGORIES = [
-  'Shopping',
-  'Meals',
-  'Transportation',
-  'Entertainment',
-  'Utilities',
-  'Healthcare',
-  'Travel',
-  'Groceries',
-  'High Value',
-];
-
-interface NewRuleForm {
-  name: string;
-  field: string;
-  operator: string;
-  value: string;
-  category: string;
-  priority: string;
 }
 
 export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModalProps) {
@@ -63,7 +21,16 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
   const [isApplying, setIsApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<NewRuleForm>({
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [editFormData, setEditFormData] = useState<RuleFormData>({
+    name: '',
+    field: 'description',
+    operator: 'contains',
+    value: '',
+    category: '',
+    priority: '0',
+  });
+  const [formData, setFormData] = useState<RuleFormData>({
     name: '',
     field: 'description',
     operator: 'contains',
@@ -92,7 +59,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => {
+    setFormData((prev: RuleFormData) => {
       const updated = { ...prev, [name]: value };
       // Reset operator when field changes
       if (name === 'field') {
@@ -182,6 +149,78 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
     }
   };
 
+  const handleStartEdit = (rule: Rule) => {
+    setEditingRuleId(rule.id);
+    setEditFormData({
+      name: rule.name,
+      field: rule.field,
+      operator: rule.operator,
+      value: rule.value,
+      category: rule.category,
+      priority: String(rule.priority),
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRuleId(null);
+    setEditFormData({
+      name: '',
+      field: 'description',
+      operator: 'contains',
+      value: '',
+      category: '',
+      priority: '0',
+    });
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditFormData((prev: RuleFormData) => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'field') {
+        updated.operator = OPERATORS[value][0].value;
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveEdit = async (ruleId: number) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`http://localhost:3000/category_rules/${ruleId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rule: {
+            name: editFormData.name,
+            field: editFormData.field,
+            operator: editFormData.operator,
+            value: editFormData.value,
+            category: editFormData.category,
+            priority: parseInt(editFormData.priority) || 0,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.errors?.join(', ') || 'Failed to update rule');
+      }
+
+      await fetchRules();
+      onRulesChange();
+      setEditingRuleId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleApplyToExisting = async () => {
     setIsApplying(true);
     setApplyResult(null);
@@ -255,42 +294,63 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
                 {rules.map((rule) => (
                   <div
                     key={rule.id}
-                    className={`flex items-center justify-between p-3 rounded-md border ${
+                    className={`rounded-md border ${
                       rule.active ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60'
                     }`}
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{rule.name}</span>
-                        <span className="text-xs text-gray-400">Priority: {rule.priority}</span>
+                    {editingRuleId === rule.id ? (
+                      <EditRule
+                        rule={rule}
+                        formData={editFormData}
+                        isSubmitting={isSubmitting}
+                        onInputChange={handleEditInputChange}
+                        onSave={handleSaveEdit}
+                        onCancel={handleCancelEdit}
+                      />
+                    ) : (
+                      /* Rule Display */
+                      <div className="flex items-center justify-between p-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{rule.name}</span>
+                            <span className="text-xs text-gray-400">Priority: {rule.priority}</span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            If <span className="font-medium">{rule.field}</span>{' '}
+                            <span className="text-indigo-600">{getOperatorLabel(rule.field, rule.operator)}</span>{' '}
+                            "<span className="font-medium">{rule.value}</span>" → assign{' '}
+                            <span className="font-medium text-green-600">{rule.category}</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActive(rule)}
+                            className={`px-2 py-1 text-xs rounded ${
+                              rule.active
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {rule.active ? 'Active' : 'Inactive'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(rule)}
+                            className="px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRule(rule.id)}
+                            className="px-2 py-1 text-xs text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        If <span className="font-medium">{rule.field}</span>{' '}
-                        <span className="text-indigo-600">{getOperatorLabel(rule.field, rule.operator)}</span>{' '}
-                        "<span className="font-medium">{rule.value}</span>" → assign{' '}
-                        <span className="font-medium text-green-600">{rule.category}</span>
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleActive(rule)}
-                        className={`px-2 py-1 text-xs rounded ${
-                          rule.active
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {rule.active ? 'Active' : 'Inactive'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRule(rule.id)}
-                        className="px-2 py-1 text-xs text-red-600 hover:text-red-800"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
