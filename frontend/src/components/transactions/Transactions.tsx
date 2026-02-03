@@ -148,6 +148,25 @@ export default function Example() {
                     formatter: (value) => `$${Number(value).toFixed(2)}`
                   },
                   { header: 'Category', accessor: 'category' },
+                  {
+                    header: 'Flag',
+                    accessor: 'flag',
+                    render: (value) => {
+                      if (!value) value = 'Valid';
+                      const redFlags = ['Suspicious', 'Urgent', 'Recurring'];
+                      const yellowFlags = ['Review Required', 'High Value'];
+                      const greenFlags = ['Valid']
+
+                      if (redFlags.includes(value)) {
+                        return <span className="text-red-500">{value}</span>;
+                      } else if (yellowFlags.includes(value)) {
+                        return <span className="text-yellow-500">{value}</span>;
+                      } else if (greenFlags.includes(value)) {
+                        return <span className="text-green-500">{value}</span>;
+                      } 
+                      return value;
+                    }
+                  },
                 ]}
                 selectable
                 selectedIds={selectedIds}
@@ -183,6 +202,7 @@ export default function Example() {
         isOpen={isRulesModalOpen}
         onClose={() => setIsRulesModalOpen(false)}
         onRulesChange={fetchCategories}
+        onTransactionsChange={fetchTransactions}
       />
     </>
   )

@@ -8,6 +8,7 @@ export interface Transaction {
   description: string;
   amount: number;
   category: string;
+  flag: string;
   created_at: string;
   updated_at: string;
 }
@@ -15,7 +16,12 @@ export interface Transaction {
 // Define the props for the Table component
 interface TableProps {
   data: Transaction[];
-  columns: { header: string; accessor: keyof Transaction; formatter?: (value: any) => string }[];
+  columns: {
+    header: string;
+    accessor: keyof Transaction;
+    formatter?: (value: any) => string;
+    render?: (value: any, row: Transaction) => React.ReactNode;
+  }[];
   selectable?: boolean;
   selectedIds?: Set<number>;
   onSelectionChange?: (selectedIds: Set<number>) => void;
@@ -88,7 +94,9 @@ const Table: React.FC<TableProps> = ({ data, columns, selectable = false, select
               )}
               {columns.map((column) => (
                 <td key={column.accessor} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {column.formatter
+                  {column.render
+                    ? column.render(row[column.accessor], row)
+                    : column.formatter
                     ? column.formatter(row[column.accessor])
                     : row[column.accessor]
                   }

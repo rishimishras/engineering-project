@@ -6,15 +6,17 @@ import EditRule, {
   FIELDS,
   OPERATORS,
   DEFAULT_CATEGORIES,
+  DEFAULT_FLAGS,
 } from './EditRule'
 
 interface RulesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRulesChange: () => void;
+  onTransactionsChange: () => void;
 }
 
-export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModalProps) {
+export default function RulesModal({ isOpen, onClose, onRulesChange, onTransactionsChange }: RulesModalProps) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,6 +30,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
     operator: 'contains',
     value: '',
     category: '',
+    flag: '',
     priority: '0',
   });
   const [formData, setFormData] = useState<RuleFormData>({
@@ -36,6 +39,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
     operator: 'contains',
     value: '',
     category: '',
+    flag: '',
     priority: '0',
   });
 
@@ -87,6 +91,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
             operator: formData.operator,
             value: formData.value,
             category: formData.category,
+            flag: formData.flag,
             priority: parseInt(formData.priority) || 0,
             active: true,
           },
@@ -107,6 +112,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
         operator: 'contains',
         value: '',
         category: '',
+        flag: '',
         priority: '0',
       });
     } catch (err) {
@@ -139,7 +145,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
         },
         body: JSON.stringify({
           rule: { active: !rule.active },
-        }),
+        }), 
       });
       if (response.ok) {
         await fetchRules();
@@ -157,6 +163,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
       operator: rule.operator,
       value: rule.value,
       category: rule.category,
+      flag: rule.flag || '',
       priority: String(rule.priority),
     });
   };
@@ -169,6 +176,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
       operator: 'contains',
       value: '',
       category: '',
+      flag: '',
       priority: '0',
     });
   };
@@ -201,6 +209,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
             operator: editFormData.operator,
             value: editFormData.value,
             category: editFormData.category,
+            flag: editFormData.flag,
             priority: parseInt(editFormData.priority) || 0,
           },
         }),
@@ -221,17 +230,18 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
     }
   };
 
-  const handleApplyToExisting = async () => {
+  const handleApplyToAll = async () => {
     setIsApplying(true);
     setApplyResult(null);
     try {
-      const response = await fetch('http://localhost:3000/category_rules/apply_to_existing', {
+      const response = await fetch('http://localhost:3000/category_rules/reset_and_reapply', {
         method: 'POST',
       });
       if (response.ok) {
         const data = await response.json();
         setApplyResult(data.message);
         onRulesChange();
+        onTransactionsChange();
       }
     } catch (err) {
       console.error('Failed to apply rules:', err);
@@ -263,11 +273,11 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
             <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-blue-700">
-                  Apply rules to existing uncategorized transactions?
+                  Apply rules to all existing transactions?
                 </p>
                 <button
                   type="button"
-                  onClick={handleApplyToExisting}
+                  onClick={handleApplyToAll}
                   disabled={isApplying}
                   className="px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-500 disabled:opacity-50"
                 >
@@ -318,8 +328,9 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
                           <p className="text-xs text-gray-600 mt-1">
                             If <span className="font-medium">{rule.field}</span>{' '}
                             <span className="text-indigo-600">{getOperatorLabel(rule.field, rule.operator)}</span>{' '}
-                            "<span className="font-medium">{rule.value}</span>" → assign{' '}
-                            <span className="font-medium text-green-600">{rule.category}</span>
+                            "<span className="font-medium">{rule.value}</span>" →
+                            {rule.category && <span> category: <span className="font-medium text-green-600">{rule.category}</span></span>}
+                            {rule.flag && <span> flag: <span className="font-medium text-orange-600">{rule.flag}</span></span>}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -441,7 +452,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
                   </p>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="rule-category" className="block text-sm font-medium text-gray-700">
                       Assign Category
@@ -449,7 +460,6 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
                     <select
                       id="rule-category"
                       name="category"
-                      required
                       value={formData.category}
                       onChange={handleInputChange}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -458,6 +468,26 @@ export default function RulesModal({ isOpen, onClose, onRulesChange }: RulesModa
                       {DEFAULT_CATEGORIES.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="rule-flag" className="block text-sm font-medium text-gray-700">
+                      Assign Flag
+                    </label>
+                    <select
+                      id="rule-flag"
+                      name="flag"
+                      value={formData.flag}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select a flag (optional)</option>
+                      {DEFAULT_FLAGS.map((flag) => (
+                        <option key={flag} value={flag}>
+                          {flag}
                         </option>
                       ))}
                     </select>

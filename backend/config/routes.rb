@@ -22,6 +22,7 @@ Rails.application.routes.draw do
     collection do
       get :categories
       post :apply_to_existing
+      post :reset_and_reapply
     end
   end
 end

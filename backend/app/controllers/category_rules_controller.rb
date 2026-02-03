@@ -44,8 +44,7 @@ class CategoryRulesController < ApplicationController
       'Utilities',
       'Healthcare',
       'Travel',
-      'Groceries',
-      'High Value'
+      'Groceries'
     ]
 
     all_categories = (default_categories + rule_categories + transaction_categories).uniq.sort
@@ -61,9 +60,18 @@ class CategoryRulesController < ApplicationController
     }
   end
 
+  def reset_and_reapply
+    updated_count = CategoryRule.reset_and_reapply_all
+    render json: {
+      success: true,
+      message: "Reset and applied rules to #{updated_count} transaction(s)",
+      updated_count: updated_count
+    }
+  end
+
   private
 
   def rule_params
-    params.require(:rule).permit(:name, :field, :operator, :value, :category, :priority, :active)
+    params.require(:rule).permit(:name, :field, :operator, :value, :category, :flag, :priority, :active)
   end
 end

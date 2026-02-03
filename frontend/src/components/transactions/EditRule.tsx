@@ -7,6 +7,7 @@ export interface Rule {
   operator: string;
   value: string;
   category: string;
+  flag: string;
   priority: number;
   active: boolean;
 }
@@ -17,6 +18,7 @@ export interface RuleFormData {
   operator: string;
   value: string;
   category: string;
+  flag: string;
   priority: string;
 }
 
@@ -47,6 +49,14 @@ export const DEFAULT_CATEGORIES = [
   'Travel',
   'Groceries',
   'High Value',
+];
+
+export const DEFAULT_FLAGS = [
+  'High Value',
+  'Review Required',
+  'Urgent',
+  'Suspicious',
+  'Recurring',
 ];
 
 interface EditRuleProps {
@@ -122,7 +132,7 @@ export default function EditRule({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Assign Category</label>
             <select
@@ -134,6 +144,21 @@ export default function EditRule({
               <option value="">Select a category</option>
               {DEFAULT_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Assign Flag</label>
+            <select
+              name="flag"
+              value={formData.flag}
+              onChange={onInputChange}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Select a flag (optional)</option>
+              {DEFAULT_FLAGS.map((flag) => (
+                <option key={flag} value={flag}>{flag}</option>
               ))}
             </select>
           </div>
