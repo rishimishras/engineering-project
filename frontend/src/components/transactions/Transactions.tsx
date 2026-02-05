@@ -3,10 +3,10 @@ import Table, { type Transaction, type PaginationInfo } from '../shared/Transact
 import { columnsWithCategory, createActionsColumn } from '../shared/TransactionColumns'
 import { useTransactionActions } from '../shared/TransactionActions'
 import EditTransactionModal from '../shared/EditTransactionModal'
-import Header from '../Header'
+import Header from '../shared/Header'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
-import BulkCategoryModal from './BulkCategoryModal'
+import BulkCategoryModal from '../shared/BulkCategoryModal'
 import CategoryRulesButton from '../shared/RulesButton'
 
 export default function Example() {

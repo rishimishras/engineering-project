@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Table, { type Transaction, type PaginationInfo } from '../shared/TransactionTable'
 import { columnsWithFlag } from '../shared/TransactionColumns'
-import BulkCategoryModal from '../transactions/BulkCategoryModal'
+import BulkCategoryModal from '../shared/BulkCategoryModal'
 
 interface UncategorizedTransactionsProps {
   onCategorized: () => void

@@ -10,7 +10,7 @@ import {
   Legend,
 } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
-import Header from '../Header'
+import Header from '../shared/Header'
 import UncategorizedTransactions from './UncategorizedTransactions'
 import FlaggedTransactions from './FlaggedTransactions'
 import CategoryRulesButton from '../shared/RulesButton'

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from './Header'
+import Header from './shared/Header'
 
 const Login = () => {
   const [email, setEmail] = useState('');
