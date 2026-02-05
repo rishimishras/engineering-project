@@ -117,12 +117,16 @@ class CategoryRule < ApplicationRecord
   end
 
   # Reset all flags and categories, then reapply all active rules (OPTIMIZED)
+  # Excludes transactions with flag 'Reviewed' to preserve manually reviewed items
   def self.reset_and_reapply_all
-    # Clear all categories and flags first
-    Transaction.update_all(category: nil, flag: nil)
+    # Exclude reviewed transactions from reset
+    scope = Transaction.where.not(flag: 'Reviewed')
 
-    # Apply rules using optimized batch method
-    apply_rules_batch(Transaction.all)
+    # Clear categories and flags for non-reviewed transactions
+    scope.update_all(category: nil, flag: nil)
+
+    # Apply rules using optimized batch method (only to non-reviewed)
+    apply_rules_batch(scope)
   end
 
   private
