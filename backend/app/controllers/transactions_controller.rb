@@ -1,11 +1,34 @@
 require 'csv'
 
 class TransactionsController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:create, :bulk_upload, :bulk_categorize]
+  skip_before_action :verify_authenticity_token, only: [:create, :update, :destroy, :bulk_upload, :bulk_categorize]
 
   def index
-    transactions = Transaction.all.order(created_at: :desc)
-    render json: transactions
+    page = (params[:page] || 1).to_i
+    per_page = (params[:per_page] || 20).to_i
+    per_page = [per_page, 100].min # Cap at 100 to prevent abuse
+
+    transactions = Transaction.order(created_at: :desc)
+    if params[:uncategorized].present?
+      transactions = transactions.where('category IS NULL OR category = ?', '')
+    end
+    if params[:flagged].present?
+      transactions = transactions.where.not(flag: [nil, '', 'Valid', 'Exception'])
+    end
+    total_count = transactions.count
+    total_pages = (total_count.to_f / per_page).ceil
+
+    paginated_transactions = transactions.offset((page - 1) * per_page).limit(per_page)
+
+    render json: {
+      transactions: paginated_transactions,
+      pagination: {
+        current_page: page,
+        per_page: per_page,
+        total_count: total_count,
+        total_pages: total_pages
+      }
+    }
   end
 
   def create
@@ -29,20 +52,11 @@ class TransactionsController < ApplicationController
       return render json: { error: 'Invalid file type. Please upload a CSV file.' }, status: :unprocessable_entity
     end
 
-    results = {
-      total: 0,
-      created: 0,
-      duplicates: 0,
-      errors: []
-    }
-
     begin
-      # Parse CSV
-      csv_data = CSV.parse(file.read, headers: true, encoding: 'UTF-8')
-
-      # Validate headers
+      # Read first row to validate headers
+      first_row = CSV.read(file.tempfile.path, headers: false, encoding: 'UTF-8').first
       required_headers = ['date', 'description', 'amount']
-      headers = csv_data.headers&.map(&:downcase) || []
+      headers = first_row&.map { |h| h.to_s.strip.underscore.downcase } || []
       missing_headers = required_headers - headers
 
       if missing_headers.any?
@@ -51,94 +65,81 @@ class TransactionsController < ApplicationController
         }, status: :unprocessable_entity
       end
 
-      # Process each row
-      csv_data.each_with_index do |row, index|
-        results[:total] += 1
-        row_number = index + 2 # +2 because index starts at 0 and we skip header
+      # Count total rows (excluding header)
+      total_rows = CSV.read(file.tempfile.path, encoding: 'UTF-8').size - 1
 
-        # Extract and clean data
-        date_str = row['date']&.strip
-        description = row['description']&.strip
-        amount_str = row['amount']&.strip
-        category = row['category']&.strip
+      # Create CsvUpload record
+      csv_upload = CsvUpload.create!(
+        filename: file.original_filename,
+        total_rows: total_rows,
+        status: :pending
+      )
 
-        # Validate required fields
-        errors = []
-        errors << 'Date is missing' if date_str.blank?
-        errors << 'Description is missing' if description.blank?
-        errors << 'Amount is missing' if amount_str.blank?
+      # Save file to permanent location
+      upload_dir = Rails.root.join('tmp', 'uploads')
+      FileUtils.mkdir_p(upload_dir) unless Dir.exist?(upload_dir)
+      permanent_path = upload_dir.join("#{csv_upload.id}_#{file.original_filename}")
+      FileUtils.cp(file.tempfile.path, permanent_path)
 
-        if errors.any?
-          results[:errors] << { row: row_number, errors: errors, data: row.to_h }
-          next
-        end
-
-        # Parse date
-        begin
-          parsed_date = Date.parse(date_str)
-        rescue ArgumentError
-          results[:errors] << {
-            row: row_number,
-            errors: ["Invalid date format: '#{date_str}'. Use YYYY-MM-DD (e.g., 2024-01-15)"],
-            data: row.to_h
-          }
-          next
-        end
-
-        # Parse amount (remove currency symbols and commas)
-        cleaned_amount = amount_str.gsub(/[$,]/, '')
-        begin
-          parsed_amount = BigDecimal(cleaned_amount)
-        rescue ArgumentError, TypeError
-          results[:errors] << {
-            row: row_number,
-            errors: ["Invalid amount format: '#{amount_str}'. Use numeric values (e.g., 100.50)"],
-            data: row.to_h
-          }
-          next
-        end
-
-        # Check for duplicates
-        if Transaction.duplicate?(parsed_date, description, parsed_amount)
-          results[:duplicates] += 1
-          results[:errors] << {
-            row: row_number,
-            errors: ['Duplicate transaction (same date, description, and amount already exists)'],
-            data: row.to_h
-          }
-          next
-        end
-
-        # Create transaction
-        transaction = Transaction.new(
-          date: parsed_date,
-          description: description,
-          amount: parsed_amount,
-          category: category
-        )
-
-        if transaction.save
-          results[:created] += 1
-        else
-          results[:errors] << {
-            row: row_number,
-            errors: transaction.errors.full_messages,
-            data: row.to_h
-          }
-        end
-      end
+      # Enqueue background job
+      ProcessCsvUploadJob.perform_later(csv_upload.id, permanent_path.to_s)
 
       render json: {
-        success: true,
-        message: "Processed #{results[:total]} rows: #{results[:created]} created, #{results[:duplicates]} duplicates, #{results[:errors].length} errors",
-        results: results
-      }, status: :created
+        id: csv_upload.id,
+        filename: csv_upload.filename,
+        total_rows: csv_upload.total_rows,
+        status: csv_upload.status
+      }, status: :accepted
 
     rescue CSV::MalformedCSVError => e
       render json: { error: "Invalid CSV format: #{e.message}" }, status: :unprocessable_entity
     rescue StandardError => e
       render json: { error: "Upload failed: #{e.message}" }, status: :internal_server_error
     end
+  end
+
+  def stats
+    # Aggregate by category (sum of absolute amounts)
+    category_stats = Transaction
+      .group(Arel.sql("COALESCE(NULLIF(category, ''), 'Uncategorized')"))
+      .select("COALESCE(NULLIF(category, ''), 'Uncategorized') as category, SUM(ABS(amount)) as total_amount, COUNT(*) as count")
+      .map { |r| { category: r.category, total_amount: r.total_amount.to_f, count: r.count } }
+
+    # Aggregate by flag (count + amount) — NULL/empty flags default to 'Valid'
+    flag_stats = Transaction
+      .group(Arel.sql("COALESCE(NULLIF(flag, ''), 'Valid')"))
+      .select("COALESCE(NULLIF(flag, ''), 'Valid') as flag, COUNT(*) as count, SUM(ABS(amount)) as total_amount")
+      .map { |r| { flag: r.flag, count: r.count, total_amount: r.total_amount.to_f } }
+
+    # Summary stats
+    total_count = Transaction.count
+    total_amount = Transaction.sum("ABS(amount)").to_f
+    avg_amount = total_count > 0 ? total_amount / total_count : 0
+
+    render json: {
+      categories: category_stats,
+      flags: flag_stats,
+      summary: {
+        total_count: total_count,
+        total_amount: total_amount,
+        avg_amount: avg_amount
+      }
+    }
+  end
+
+  def update
+    transaction = Transaction.find(params[:id])
+    if transaction.update(transaction_params)
+      render json: transaction
+    else
+      render json: transaction.errors, status: :unprocessable_entity
+    end
+  end
+
+  def destroy
+    transaction = Transaction.find(params[:id])
+    transaction.destroy
+    head :no_content
   end
 
   def bulk_categorize

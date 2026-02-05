@@ -1,29 +1,36 @@
 import { useState, useEffect } from 'react'
-import Table, { type Transaction } from './TransactionTable'
-import Layout from '../Layout'
+import Table, { type Transaction, type PaginationInfo } from './TransactionTable'
+import Header from '../Header'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
 import BulkCategoryModal from './BulkCategoryModal'
-import RulesModal from './RulesModal'
+import CategoryRulesButton from '../CategoryRulesButton'
 
 export default function Example() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkCategoryModalOpen, setIsBulkCategoryModalOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (page = currentPage, itemsPerPage = perPage) => {
+    setLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/transactions');
+      const response = await fetch(
+        `http://localhost:3000/transactions?page=${page}&per_page=${itemsPerPage}`
+      );
       if (!response.ok) {
         throw new Error('Failed to fetch transactions');
       }
       const data = await response.json();
-      setTransactions(data);
+      setTransactions(data.transactions);
+      setPagination(data.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -43,9 +50,20 @@ export default function Example() {
   };
 
   useEffect(() => {
-    fetchTransactions();
+    fetchTransactions(currentPage, perPage);
     fetchCategories();
-  }, []);
+  }, [currentPage, perPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setSelectedIds(new Set()); // Clear selection on page change
+  };
+
+  const handlePerPageChange = (newPerPage: number) => {
+    setPerPage(newPerPage);
+    setCurrentPage(1); // Reset to first page when changing items per page
+    setSelectedIds(new Set());
+  };
 
   const handleOpenModal = () => {
     setIsModalOpen(true);
@@ -72,7 +90,8 @@ export default function Example() {
   };
 
   const handleBulkUploadSuccess = () => {
-    fetchTransactions();
+    setCurrentPage(1); // Reset to first page to show new transactions
+    fetchTransactions(1, perPage);
   };
 
   const handleOpenBulkCategoryModal = () => {
@@ -90,13 +109,13 @@ export default function Example() {
 
   return (
     <>
-      <Layout currentPage="Transactions">
+      <Header currentPage="Transactions">
         <header className="sticky top-15 z-50 bg-white shadow-md">
         {/* <header className="relative bg-white shadow-sm"> */}
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="px-4 py-6 sm:px-6 lg:px-8">
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Transactions</h1>
           </div>
-          <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8 mt-4 flex gap-3 items-center">
+          <div className="py-6 sm:px-6 lg:px-8 mt-4 flex gap-3 items-center">
             <button
               type="button"
               onClick={handleOpenModal}
@@ -120,21 +139,19 @@ export default function Example() {
                 Categorize ({selectedIds.size})
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setIsRulesModalOpen(true)}
+            <CategoryRulesButton
               className="ml-auto px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 border border-indigo-600 rounded-md hover:bg-indigo-50"
-            >
-              Category Rules
-            </button>
+              isOpen={isRulesModalOpen}
+              onOpenChange={setIsRulesModalOpen}
+              onRulesChange={fetchCategories}
+              onTransactionsChange={fetchTransactions}
+            />
           </div>
         </header>
 
         <main>
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            {loading ? (
-              <div className="text-center py-4">Loading transactions...</div>
-            ) : error ? (
+          <div className="px-4 py-6 sm:px-6 lg:px-8">
+            {error ? (
               <div className="text-center py-4 text-red-600">Error: {error}</div>
             ) : (
               <Table
@@ -163,7 +180,9 @@ export default function Example() {
                         return <span className="text-yellow-500">{value}</span>;
                       } else if (greenFlags.includes(value)) {
                         return <span className="text-green-500">{value}</span>;
-                      } 
+                      } else if (value === 'Exception') {
+                        return <span className="text-blue-500">{value}</span>;
+                      }
                       return value;
                     }
                   },
@@ -171,11 +190,15 @@ export default function Example() {
                 selectable
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
+                pagination={pagination || undefined}
+                onPageChange={handlePageChange}
+                onPerPageChange={handlePerPageChange}
+                loading={loading}
               />
             )}
           </div>
         </main>
-      </Layout>
+      </Header>
 
       <CreateTransactionModal
         isOpen={isModalOpen}
@@ -197,12 +220,6 @@ export default function Example() {
         onClose={handleCloseBulkCategoryModal}
         onSuccess={handleBulkCategorySuccess}
         selectedIds={selectedIds}
-      />
-      <RulesModal
-        isOpen={isRulesModalOpen}
-        onClose={() => setIsRulesModalOpen(false)}
-        onRulesChange={fetchCategories}
-        onTransactionsChange={fetchTransactions}
       />
     </>
   )

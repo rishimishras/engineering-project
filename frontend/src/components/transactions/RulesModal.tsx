@@ -261,7 +261,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="mx-auto max-w-7xl w-full rounded-lg bg-white p-8 shadow-xl max-h-[90vh] overflow-y-auto">
           <DialogTitle className="text-xl font-bold text-gray-900 mb-4">
-            Category Rules
+            Category and Flag Rules
           </DialogTitle>
 
           <p className="text-sm text-gray-600 mb-4">

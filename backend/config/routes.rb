@@ -11,8 +11,9 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   # root "posts#index"
-  resources :transactions, only: [:index, :create] do
+  resources :transactions, only: [:index, :create, :update, :destroy] do
     collection do
+      get :stats
       post :bulk_upload
       patch :bulk_categorize
     end
@@ -25,4 +26,6 @@ Rails.application.routes.draw do
       post :reset_and_reapply
     end
   end
+
+  resources :csv_uploads, only: [:show]
 end

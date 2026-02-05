@@ -10,8 +10,10 @@ import {
   Legend,
 } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
-import Layout from '../Layout'
-import type { Transaction } from '../transactions/TransactionTable'
+import Header from '../Header'
+import UncategorizedTransactions from './UncategorizedTransactions'
+import FlaggedTransactions from './FlaggedTransactions'
+import CategoryRulesButton from '../CategoryRulesButton'
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +25,27 @@ ChartJS.register(
   Legend
 )
 
+interface CategoryStat {
+  category: string
+  total_amount: number
+  count: number
+}
+
+interface FlagStat {
+  flag: string
+  count: number
+  total_amount: number
+}
+
+interface Stats {
+  categories: CategoryStat[]
+  flags: FlagStat[]
+  summary: {
+    total_count: number
+    total_amount: number
+  }
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   Shopping: '#3B82F6',
   Meals: '#F97316',
@@ -32,7 +55,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Healthcare: '#10B981',
   Travel: '#06B6D4',
   Groceries: '#84CC16',
-  'High Value': '#EAB308',
+  Uncategorized: '#4B5563',
 }
 
 const FLAG_COLORS: Record<string, string> = {
@@ -42,6 +65,7 @@ const FLAG_COLORS: Record<string, string> = {
   Suspicious: '#DC2626',
   Recurring: '#8B5CF6',
   Valid: '#22C55E',
+  None: '#6B7280',
 }
 
 function getColor(key: string, colorMap: Record<string, string>, index: number): string {
@@ -50,45 +74,62 @@ function getColor(key: string, colorMap: Record<string, string>, index: number):
   return fallbackColors[index % fallbackColors.length]
 }
 
+type ExpandedSection = 'uncategorized' | 'flagged' | null
+
 export default function Dashboard() {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedSection, setExpandedSection] = useState<ExpandedSection>(null)
+
+  const toggleSection = (section: 'uncategorized' | 'flagged') => {
+    setExpandedSection(prev => prev === section ? null : section)
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/transactions/stats')
+      if (!response.ok) throw new Error('Failed to fetch stats')
+      const data = await response.json()
+    console.log("stats***", stats)
+      setStats(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        const response = await fetch('http://localhost:3000/transactions')
-        if (!response.ok) throw new Error('Failed to fetch transactions')
-        const data = await response.json()
-        setTransactions(data)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchTransactions()
+    fetchStats()
   }, [])
 
-  const categoryData = transactions.reduce((acc, t) => {
-    const cat = t.category || 'Uncategorized'
-    acc[cat] = (acc[cat] || 0) + Math.abs(t.amount)
-    return acc
-  }, {} as Record<string, number>)
+  if (loading) {
+    return (
+      <Header currentPage="Dashboard">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </Header>
+    )
+  }
 
-  const flagData = transactions.reduce((acc, t) => {
-    const flag = t.flag || 'None'
-    acc[flag] = (acc[flag] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  if (error || !stats) {
+    return (
+      <Header currentPage="Dashboard">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-red-400">{error || 'Failed to load stats'}</p>
+        </div>
+      </Header>
+    )
+  }
 
-  const categoryLabels = Object.keys(categoryData)
-  const categoryValues = Object.values(categoryData)
+  const categoryLabels = stats.categories.map(c => c.category)
+  const categoryValues = stats.categories.map(c => c.total_amount)
   const categoryColors = categoryLabels.map((label, i) => getColor(label, CATEGORY_COLORS, i))
 
-  const flagLabels = Object.keys(flagData)
-  const flagValues = Object.values(flagData)
+  const flagLabels = stats.flags.map(f => f.flag)
+  const flagValues = stats.flags.map(f => f.count)
   const flagColors = flagLabels.map((label, i) => getColor(label, FLAG_COLORS, i))
 
   const barChartData = {
@@ -137,50 +178,37 @@ export default function Dashboard() {
     },
   }
 
-  if (loading) {
-    return (
-      <Layout currentPage="Dashboard">
-        <div className="flex items-center justify-center h-64">
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </Layout>
-    )
-  }
-
-  if (error) {
-    return (
-      <Layout currentPage="Dashboard">
-        <div className="flex items-center justify-center h-64">
-          <p className="text-red-400">{error}</p>
-        </div>
-      </Layout>
-    )
-  }
-
-  const totalAmount = transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0)
-  const avgAmount = transactions.length ? totalAmount / transactions.length : 0
+  const { total_count, total_amount } = stats.summary
+  const flaggedAmount = stats.flags
+    .filter(f => f.flag !== 'Valid')
+    .reduce((sum, f) => sum + f.total_amount, 0)
 
   return (
-    <Layout currentPage="Dashboard">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-white mb-6">Dashboard</h1>
-
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Total Transactions</p>
-            <p className="text-2xl font-bold text-white">{transactions.length}</p>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Total Amount</p>
-            <p className="text-2xl font-bold text-green-400">${totalAmount.toFixed(2)}</p>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Average Transaction</p>
-            <p className="text-2xl font-bold text-blue-400">${avgAmount.toFixed(2)}</p>
-          </div>
+    <Header currentPage="Dashboard">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold text-black">Dashboard</h1>
+          <CategoryRulesButton onRulesChange={fetchStats} onTransactionsChange={fetchStats} />
         </div>
-
-        <div className="grid grid-cols-2 gap-6">
+        {!expandedSection && (
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-2">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <p className="text-gray-400 text-sm">Total Transactions</p>
+                <p className="text-2xl font-bold text-white">{total_count.toLocaleString()}</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <p className="text-gray-400 text-sm">Total Amount</p>
+                <p className="text-2xl font-bold text-green-400">${total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <p className="text-gray-400 text-sm">Flagged Amount</p>
+                <p className="text-2xl font-bold text-red-400">${flaggedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+          </>
+        )}
+        <div className="sticky top-0 z-50 grid grid-cols-2 gap-2">
           <div className="bg-gray-800 rounded-lg p-4 h-80">
             <Bar data={barChartData} options={barOptions} />
           </div>
@@ -188,7 +216,17 @@ export default function Dashboard() {
             <Pie data={pieChartData} options={pieOptions} />
           </div>
         </div>
+        <UncategorizedTransactions
+          onCategorized={fetchStats}
+          expanded={expandedSection === 'uncategorized'}
+          onToggle={() => toggleSection('uncategorized')}
+        />
+        <FlaggedTransactions
+          onChanged={fetchStats}
+          expanded={expandedSection === 'flagged'}
+          onToggle={() => toggleSection('flagged')}
+        />
       </div>
-    </Layout>
+    </Header>
   )
 }

@@ -43,59 +43,86 @@ class CategoryRule < ApplicationRecord
     end
   end
 
-  # Apply rules to transactions missing category or flag
+  # Apply rules to transactions missing category or flag (OPTIMIZED with batch SQL)
   def self.apply_to_uncategorized
-    # Find transactions where category OR flag is missing
-    transactions_to_update = Transaction.where('category IS NULL OR category = ? OR flag IS NULL OR flag = ?', '', '')
+    apply_rules_batch(Transaction.where('category IS NULL OR category = ? OR flag IS NULL OR flag = ?', '', ''))
+  end
+
+  # Optimized batch rule application using SQL updates
+  def self.apply_rules_batch(scope = Transaction.all)
+    rules = active.by_priority.to_a
+    return 0 if rules.empty?
+
     updated_count = 0
 
-    transactions_to_update.find_each do |transaction|
-      matching_rule = active.by_priority.find { |rule| rule.matches?(transaction) }
-      if matching_rule
-        updates = {}
-        # Only update if the field is currently blank
-        updates[:category] = matching_rule.category if transaction.category.blank? && matching_rule.category.present?
-        updates[:flag] = matching_rule.flag if transaction.flag.blank? && matching_rule.flag.present?
+    # Apply category rules (description-based first, highest priority)
+    category_rules = rules.select { |r| r.category.present? }
+    description_rules = category_rules.select { |r| r.field == 'description' }.sort_by { |r| -r.priority }
 
-        if updates.any?
-          transaction.update_columns(updates)
-          updated_count += 1
-        end
-      end
+    description_rules.each do |rule|
+      count = apply_rule_batch(scope.where('category IS NULL OR category = ?', ''), rule, :category)
+      updated_count += count
+    end
+
+    # Apply flag rules (amount-based, highest priority)
+    flag_rules = rules.select { |r| r.flag.present? }
+    amount_rules = flag_rules.select { |r| r.field == 'amount' }.sort_by { |r| -r.priority }
+
+    amount_rules.each do |rule|
+      count = apply_rule_batch(scope.where('flag IS NULL OR flag = ?', ''), rule, :flag)
+      updated_count += count
     end
 
     updated_count
   end
 
-  # Reset all flags and categories, then reapply all active rules
-  def self.reset_and_reapply_all
-    updated_count = 0
+  # Apply a single rule to matching transactions in batch
+  def self.apply_rule_batch(scope, rule, field_to_update)
+    matching_scope = build_matching_scope(scope, rule)
+    return 0 if matching_scope.nil?
 
-    Transaction.find_each do |transaction|
-      matching_rules = active.by_priority.select { |rule| rule.matches?(transaction) }
+    value_to_set = field_to_update == :category ? rule.category : rule.flag
+    matching_scope.update_all(field_to_update => value_to_set)
+  end
 
-      # For category: prefer description rules, then any rule with category
-      category_rule = matching_rules.find { |rule| rule.field == 'description' && rule.category.present? }
-      category_rule ||= matching_rules.find { |rule| rule.category.present? }
-      determined_category = category_rule&.category
+  # Build SQL scope for matching transactions
+  def self.build_matching_scope(scope, rule)
+    case rule.field
+    when 'description'
+      case rule.operator
+      when 'contains'
+        keywords = rule.value.split(',').map(&:strip)
+        conditions = keywords.map { |kw| "LOWER(description) LIKE ?" }
+        values = keywords.map { |kw| "%#{kw.downcase}%" }
+        scope.where(conditions.join(' OR '), *values)
+      when 'equals'
+        keywords = rule.value.split(',').map(&:strip)
+        conditions = keywords.map { "LOWER(description) = ?" }
+        values = keywords.map { |kw| kw.downcase }
+        scope.where(conditions.join(' OR '), *values)
+      end
+    when 'amount'
+      threshold = BigDecimal(rule.value) rescue nil
+      return nil unless threshold
 
-      # For flag: prefer amount rules that match the determined category, then any amount rule with flag
-      flag_rule = matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? && rule.category == determined_category }
-      flag_rule ||= matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? }
-      flag_rule ||= matching_rules.find { |rule| rule.flag.present? }
-
-      updates = {}
-      updates[:category] = determined_category.presence
-      updates[:flag] = flag_rule&.flag.presence
-
-      # Only update if values changed
-      if transaction.category != updates[:category] || transaction.flag != updates[:flag]
-        transaction.update_columns(updates)
-        updated_count += 1
+      case rule.operator
+      when 'greater_than'
+        scope.where('amount > ?', threshold)
+      when 'less_than'
+        scope.where('amount < ?', threshold)
+      when 'equals'
+        scope.where(amount: threshold)
       end
     end
+  end
 
-    updated_count
+  # Reset all flags and categories, then reapply all active rules (OPTIMIZED)
+  def self.reset_and_reapply_all
+    # Clear all categories and flags first
+    Transaction.update_all(category: nil, flag: nil)
+
+    # Apply rules using optimized batch method
+    apply_rules_batch(Transaction.all)
   end
 
   private
@@ -111,7 +138,8 @@ class CategoryRule < ApplicationRecord
       keywords = value.split(',').map(&:strip).map(&:downcase)
       keywords.any? { |keyword| desc_lower.include?(keyword) }
     when 'equals'
-      desc_lower == value.downcase
+      keywords = value.split(',').map(&:strip).map(&:downcase)
+      keywords.any? { |keyword| desc_lower == keyword }
     else
       false
     end
