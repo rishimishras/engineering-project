@@ -14,6 +14,7 @@ import Header from '../shared/Header'
 import UncategorizedTransactions from './UncategorizedTransactions'
 import FlaggedTransactions from './FlaggedTransactions'
 import CategoryRulesButton from '../shared/RulesButton'
+import { API_URL } from '../../config'
 
 ChartJS.register(
   CategoryScale,
@@ -94,7 +95,7 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:3000/transactions/stats')
+      const response = await fetch(`${API_URL}/transactions/stats`)
       if (!response.ok) throw new Error('Failed to fetch stats')
       const data = await response.json()
     console.log("stats***", stats)

@@ -4,6 +4,7 @@ import Table from '../shared/TransactionTable'
 import { columnsWithCategory, createActionsColumn } from '../shared/TransactionColumns'
 import { useTransactionActions } from '../shared/TransactionActions'
 import EditTransactionModal from '../shared/EditTransactionModal'
+import { API_URL } from '../../config'
 
 interface FlaggedTransactionsProps {
   onChanged: () => void
@@ -24,7 +25,7 @@ export default function FlaggedTransactions({ onChanged, expanded, onToggle, ref
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:3000/transactions?flagged=true&page=${p}&per_page=${pp}`
+        `${API_URL}/transactions?flagged=true&page=${p}&per_page=${pp}`
       )
       if (!response.ok) throw new Error('Failed to fetch flagged transactions')
       const data = await response.json()
@@ -39,7 +40,7 @@ export default function FlaggedTransactions({ onChanged, expanded, onToggle, ref
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:3000/category_rules/categories')
+      const response = await fetch(`${API_URL}/category_rules/categories`)
       if (response.ok) {
         const data = await response.json()
         setCategories(data)

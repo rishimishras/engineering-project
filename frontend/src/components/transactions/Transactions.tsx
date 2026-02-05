@@ -8,6 +8,7 @@ import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
 import BulkCategoryModal from '../shared/BulkCategoryModal'
 import CategoryRulesButton from '../shared/RulesButton'
+import { API_URL } from '../../config'
 
 export default function Example() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -27,7 +28,7 @@ export default function Example() {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:3000/transactions?page=${page}&per_page=${itemsPerPage}`
+        `${API_URL}/transactions?page=${page}&per_page=${itemsPerPage}`
       );
       if (!response.ok) {
         throw new Error('Failed to fetch transactions');
@@ -44,7 +45,7 @@ export default function Example() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:3000/category_rules/categories');
+      const response = await fetch(`${API_URL}/category_rules/categories`);
       if (response.ok) {
         const data = await response.json();
         setCategories(data);

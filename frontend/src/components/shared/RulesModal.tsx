@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
+import { API_URL } from '../../config'
 import EditRule, {
   type Rule,
   type RuleFormData,
@@ -51,7 +52,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
 
   const fetchRules = async () => {
     try {
-      const response = await fetch('http://localhost:3000/category_rules');
+      const response = await fetch(`${API_URL}/category_rules`);
       if (response.ok) {
         const data = await response.json();
         setRules(data);
@@ -79,7 +80,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3000/category_rules', {
+      const response = await fetch(`${API_URL}/category_rules`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -124,7 +125,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
 
   const handleDeleteRule = async (id: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/category_rules/${id}`, {
+      const response = await fetch(`${API_URL}/category_rules/${id}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -138,7 +139,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
 
   const handleToggleActive = async (rule: Rule) => {
     try {
-      const response = await fetch(`http://localhost:3000/category_rules/${rule.id}`, {
+      const response = await fetch(`${API_URL}/category_rules/${rule.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +198,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3000/category_rules/${ruleId}`, {
+      const response = await fetch(`${API_URL}/category_rules/${ruleId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -234,7 +235,7 @@ export default function RulesModal({ isOpen, onClose, onRulesChange, onTransacti
     setIsApplying(true);
     setApplyResult(null);
     try {
-      const response = await fetch('http://localhost:3000/category_rules/reset_and_reapply', {
+      const response = await fetch(`${API_URL}/category_rules/reset_and_reapply`, {
         method: 'POST',
       });
       if (response.ok) {

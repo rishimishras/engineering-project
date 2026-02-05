@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
+import { API_URL } from '../../config'
 
 interface BulkUploadModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
   const pollProgress = async (uploadId: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/csv_uploads/${uploadId}`);
+      const response = await fetch(`${API_URL}/csv_uploads/${uploadId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch progress');
       }
@@ -111,7 +112,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
         xhr.onerror = () => reject(new Error('Upload failed'));
 
-        xhr.open('POST', 'http://localhost:3000/transactions/bulk_upload');
+        xhr.open('POST', `${API_URL}/transactions/bulk_upload`);
         xhr.send(formData);
       });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Transaction } from './TransactionTable'
+import { API_URL } from '../../config'
 
 export interface EditForm {
   date: string
@@ -24,7 +25,7 @@ export function useTransactionActions(options: UseTransactionActionsOptions = {}
 
   const handleApprove = async (id: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/transactions/${id}`, {
+      const response = await fetch(`${API_URL}/transactions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transaction: { flag: 'Reviewed' } }),
@@ -39,7 +40,7 @@ export function useTransactionActions(options: UseTransactionActionsOptions = {}
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this transaction?')) return
     try {
-      const response = await fetch(`http://localhost:3000/transactions/${id}`, {
+      const response = await fetch(`${API_URL}/transactions/${id}`, {
         method: 'DELETE',
       })
       if (!response.ok) throw new Error('Failed to delete transaction')
@@ -74,7 +75,7 @@ export function useTransactionActions(options: UseTransactionActionsOptions = {}
     setError(null)
 
     try {
-      const response = await fetch(`http://localhost:3000/transactions/${editingTransaction.id}`, {
+      const response = await fetch(`${API_URL}/transactions/${editingTransaction.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

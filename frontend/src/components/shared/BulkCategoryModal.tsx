@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
+import { API_URL } from '../../config'
 
 interface BulkCategoryModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export default function BulkCategoryModal({ isOpen, onClose, onSuccess, selected
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:3000/category_rules/categories');
+      const response = await fetch(`${API_URL}/category_rules/categories`);
       if (response.ok) {
         const data = await response.json();
         setCategories(data);
@@ -44,7 +45,7 @@ export default function BulkCategoryModal({ isOpen, onClose, onSuccess, selected
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3000/transactions/bulk_categorize', {
+      const response = await fetch(`${API_URL}/transactions/bulk_categorize`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

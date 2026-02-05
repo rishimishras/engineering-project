@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
+import { API_URL } from '../../config'
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export default function CreateTransactionModal({ isOpen, onClose, onSuccess, onE
     e.preventDefault();
 
     try {
-      const response = await fetch('http://localhost:3000/transactions', {
+      const response = await fetch(`${API_URL}/transactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

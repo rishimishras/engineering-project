@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Table, { type Transaction, type PaginationInfo } from '../shared/TransactionTable'
 import { columnsWithFlag } from '../shared/TransactionColumns'
 import BulkCategoryModal from '../shared/BulkCategoryModal'
+import { API_URL } from '../../config'
 
 interface UncategorizedTransactionsProps {
   onCategorized: () => void
@@ -23,7 +24,7 @@ export default function UncategorizedTransactions({ onCategorized, expanded, onT
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:3000/transactions?uncategorized=true&page=${p}&per_page=${pp}`
+        `${API_URL}/transactions?uncategorized=true&page=${p}&per_page=${pp}`
       )
       if (!response.ok) throw new Error('Failed to fetch uncategorized transactions')
       const data = await response.json()
