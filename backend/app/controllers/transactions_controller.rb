@@ -13,7 +13,7 @@ class TransactionsController < ApplicationController
       transactions = transactions.where('category IS NULL OR category = ?', '')
     end
     if params[:flagged].present?
-      transactions = transactions.where.not(flag: [nil, '', 'Valid', 'Exception'])
+      transactions = transactions.where.not(flag: [nil, '', 'Valid', 'Reviewed'])
     end
     total_count = transactions.count
     total_pages = (total_count.to_f / per_page).ceil
@@ -150,7 +150,9 @@ class TransactionsController < ApplicationController
       return render json: { error: 'No transaction IDs provided' }, status: :unprocessable_entity
     end
 
-    updated_count = Transaction.where(id: ids).update_all(category: category)
+    updates = { category: category }
+    updates[:flag] = 'Reviewed' if category.present?
+    updated_count = Transaction.where(id: ids).update_all(updates)
 
     render json: {
       success: true,

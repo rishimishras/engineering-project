@@ -13,7 +13,7 @@ import { Bar, Pie } from 'react-chartjs-2'
 import Header from '../Header'
 import UncategorizedTransactions from './UncategorizedTransactions'
 import FlaggedTransactions from './FlaggedTransactions'
-import CategoryRulesButton from '../CategoryRulesButton'
+import CategoryRulesButton from '../shared/RulesButton'
 
 ChartJS.register(
   CategoryScale,
@@ -81,6 +81,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<ExpandedSection>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleTransactionChange = () => {
+    fetchStats()
+    setRefreshKey(prev => prev + 1)
+  }
 
   const toggleSection = (section: 'uncategorized' | 'flagged') => {
     setExpandedSection(prev => prev === section ? null : section)
@@ -217,14 +223,16 @@ export default function Dashboard() {
           </div>
         </div>
         <UncategorizedTransactions
-          onCategorized={fetchStats}
+          onCategorized={handleTransactionChange}
           expanded={expandedSection === 'uncategorized'}
           onToggle={() => toggleSection('uncategorized')}
+          refreshKey={refreshKey}
         />
         <FlaggedTransactions
-          onChanged={fetchStats}
+          onChanged={handleTransactionChange}
           expanded={expandedSection === 'flagged'}
           onToggle={() => toggleSection('flagged')}
+          refreshKey={refreshKey}
         />
       </div>
     </Header>

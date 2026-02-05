@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
-import Table, { type Transaction, type PaginationInfo } from '../transactions/TransactionTable'
+import Table, { type Transaction, type PaginationInfo } from '../shared/TransactionTable'
+import { columnsWithFlag } from '../shared/TransactionColumns'
 import BulkCategoryModal from '../transactions/BulkCategoryModal'
 
 interface UncategorizedTransactionsProps {
   onCategorized: () => void
   expanded: boolean
   onToggle: () => void
+  refreshKey: number
 }
 
-export default function UncategorizedTransactions({ onCategorized, expanded, onToggle }: UncategorizedTransactionsProps) {
+export default function UncategorizedTransactions({ onCategorized, expanded, onToggle, refreshKey }: UncategorizedTransactionsProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [pagination, setPagination] = useState<PaginationInfo | null>(null)
   const [page, setPage] = useState(1)
@@ -36,7 +38,7 @@ export default function UncategorizedTransactions({ onCategorized, expanded, onT
 
   useEffect(() => {
     fetchUncategorized(page, perPage)
-  }, [page, perPage])
+  }, [page, perPage, refreshKey])
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage)
@@ -88,29 +90,7 @@ export default function UncategorizedTransactions({ onCategorized, expanded, onT
         </div>
         {expanded && <Table
           data={transactions}
-          columns={[
-            { header: 'Date', accessor: 'date' },
-            { header: 'Description', accessor: 'description' },
-            {
-              header: 'Amount',
-              accessor: 'amount',
-              formatter: (value) => `$${Number(value).toFixed(2)}`
-            },
-            {
-              header: 'Flag',
-              accessor: 'flag',
-              render: (value) => {
-                if (!value) value = 'Valid'
-                const redFlags = ['Suspicious', 'Urgent', 'Recurring']
-                const yellowFlags = ['Review Required', 'High Value']
-                const greenFlags = ['Valid']
-                if (redFlags.includes(value)) return <span className="text-red-500">{value}</span>
-                if (yellowFlags.includes(value)) return <span className="text-yellow-500">{value}</span>
-                if (greenFlags.includes(value)) return <span className="text-green-500">{value}</span>
-                return value
-              }
-            },
-          ]}
+          columns={columnsWithFlag}
           selectable
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}

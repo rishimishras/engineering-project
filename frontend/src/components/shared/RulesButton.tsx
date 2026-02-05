@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import RulesModal from './transactions/RulesModal'
+import RulesModal from './RulesModal'
 
 interface CategoryRulesButtonProps {
   onRulesChange?: () => void

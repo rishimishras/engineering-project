@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
-import Table, { type Transaction, type PaginationInfo } from './TransactionTable'
+import Table, { type Transaction, type PaginationInfo } from '../shared/TransactionTable'
+import { columnsWithCategory, createActionsColumn } from '../shared/TransactionColumns'
+import { useTransactionActions } from '../shared/TransactionActions'
+import EditTransactionModal from '../shared/EditTransactionModal'
 import Header from '../Header'
 import CreateTransactionModal from './CreateTransactionModal'
 import BulkUploadModal from './BulkUploadModal'
 import BulkCategoryModal from './BulkCategoryModal'
-import CategoryRulesButton from '../CategoryRulesButton'
+import CategoryRulesButton from '../shared/RulesButton'
 
 export default function Example() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -19,6 +22,7 @@ export default function Example() {
   const [isBulkCategoryModalOpen, setIsBulkCategoryModalOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+
   const fetchTransactions = async (page = currentPage, itemsPerPage = perPage) => {
     setLoading(true);
     try {
@@ -37,7 +41,8 @@ export default function Example() {
       setLoading(false);
     }
   };
-    const fetchCategories = async () => {
+
+  const fetchCategories = async () => {
     try {
       const response = await fetch('http://localhost:3000/category_rules/categories');
       if (response.ok) {
@@ -49,6 +54,22 @@ export default function Example() {
     }
   };
 
+  const handleSuccess = () => {
+    fetchTransactions(currentPage, perPage);
+  };
+
+  const {
+    editForm,
+    setEditForm,
+    isEditModalOpen,
+    isSubmitting,
+    error: editError,
+    handleDelete,
+    openEditModal,
+    closeEditModal,
+    handleEditSubmit,
+  } = useTransactionActions({ onSuccess: handleSuccess });
+
   useEffect(() => {
     fetchTransactions(currentPage, perPage);
     fetchCategories();
@@ -56,12 +77,12 @@ export default function Example() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    setSelectedIds(new Set()); // Clear selection on page change
+    setSelectedIds(new Set());
   };
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage);
-    setCurrentPage(1); // Reset to first page when changing items per page
+    setCurrentPage(1);
     setSelectedIds(new Set());
   };
 
@@ -90,7 +111,7 @@ export default function Example() {
   };
 
   const handleBulkUploadSuccess = () => {
-    setCurrentPage(1); // Reset to first page to show new transactions
+    setCurrentPage(1);
     fetchTransactions(1, perPage);
   };
 
@@ -111,7 +132,6 @@ export default function Example() {
     <>
       <Header currentPage="Transactions">
         <header className="sticky top-15 z-50 bg-white shadow-md">
-        {/* <header className="relative bg-white shadow-sm"> */}
           <div className="px-4 py-6 sm:px-6 lg:px-8">
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Transactions</h1>
           </div>
@@ -157,35 +177,11 @@ export default function Example() {
               <Table
                 data={transactions}
                 columns={[
-                  { header: 'Date', accessor: 'date' },
-                  { header: 'Description', accessor: 'description' },
-                  {
-                    header: 'Amount',
-                    accessor: 'amount',
-                    formatter: (value) => `$${Number(value).toFixed(2)}`
-                  },
-                  { header: 'Category', accessor: 'category' },
-                  {
-                    header: 'Flag',
-                    accessor: 'flag',
-                    render: (value) => {
-                      if (!value) value = 'Valid';
-                      const redFlags = ['Suspicious', 'Urgent', 'Recurring'];
-                      const yellowFlags = ['Review Required', 'High Value'];
-                      const greenFlags = ['Valid']
-
-                      if (redFlags.includes(value)) {
-                        return <span className="text-red-500">{value}</span>;
-                      } else if (yellowFlags.includes(value)) {
-                        return <span className="text-yellow-500">{value}</span>;
-                      } else if (greenFlags.includes(value)) {
-                        return <span className="text-green-500">{value}</span>;
-                      } else if (value === 'Exception') {
-                        return <span className="text-blue-500">{value}</span>;
-                      }
-                      return value;
-                    }
-                  },
+                  ...columnsWithCategory,
+                  createActionsColumn({
+                    onEdit: openEditModal,
+                    onDelete: handleDelete,
+                  }),
                 ]}
                 selectable
                 selectedIds={selectedIds}
@@ -220,6 +216,17 @@ export default function Example() {
         onClose={handleCloseBulkCategoryModal}
         onSuccess={handleBulkCategorySuccess}
         selectedIds={selectedIds}
+      />
+
+      <EditTransactionModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        onSubmit={handleEditSubmit}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        categories={categories}
+        isSubmitting={isSubmitting}
+        error={editError}
       />
     </>
   )
