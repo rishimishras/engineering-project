@@ -48,7 +48,6 @@ export const DEFAULT_CATEGORIES = [
   'Healthcare',
   'Travel',
   'Groceries',
-  'High Value',
 ];
 
 export const DEFAULT_FLAGS = [

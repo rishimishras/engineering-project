@@ -27,14 +27,16 @@ class CategoryRule < ApplicationRecord
     matching_rules = active.by_priority.select { |rule| rule.matches?(transaction) }
 
     # For category: prefer description rules, then any rule with category
-    if transaction.category.blank?
+    # Skip if category_manual_override is true
+    if transaction.category.blank? && !transaction.category_manual_override
       category_rule = matching_rules.find { |rule| rule.field == 'description' && rule.category.present? }
       category_rule ||= matching_rules.find { |rule| rule.category.present? }
       transaction.category = category_rule.category if category_rule
     end
 
     # For flag: prefer amount rules that match the transaction's category, then any amount rule with flag
-    if transaction.flag.blank?
+    # Skip if flag_manual_override is true
+    if transaction.flag.blank? && !transaction.flag_manual_override
       determined_category = transaction.category
       flag_rule = matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? && rule.category == determined_category }
       flag_rule ||= matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? }
@@ -56,20 +58,24 @@ class CategoryRule < ApplicationRecord
     updated_count = 0
 
     # Apply category rules (description-based first, highest priority)
+    # Skip transactions with category_manual_override
     category_rules = rules.select { |r| r.category.present? }
     description_rules = category_rules.select { |r| r.field == 'description' }.sort_by { |r| -r.priority }
 
+    category_scope = scope.where(category_manual_override: false).where('category IS NULL OR category = ?', '')
     description_rules.each do |rule|
-      count = apply_rule_batch(scope.where('category IS NULL OR category = ?', ''), rule, :category)
+      count = apply_rule_batch(category_scope, rule, :category)
       updated_count += count
     end
 
     # Apply flag rules (amount-based, highest priority)
+    # Skip transactions with flag_manual_override
     flag_rules = rules.select { |r| r.flag.present? }
     amount_rules = flag_rules.select { |r| r.field == 'amount' }.sort_by { |r| -r.priority }
 
+    flag_scope = scope.where(flag_manual_override: false).where('flag IS NULL OR flag = ?', '')
     amount_rules.each do |rule|
-      count = apply_rule_batch(scope.where('flag IS NULL OR flag = ?', ''), rule, :flag)
+      count = apply_rule_batch(flag_scope, rule, :flag)
       updated_count += count
     end
 
@@ -116,17 +122,15 @@ class CategoryRule < ApplicationRecord
     end
   end
 
-  # Reset all flags and categories, then reapply all active rules (OPTIMIZED)
-  # Excludes transactions with flag 'Reviewed' to preserve manually reviewed items
   def self.reset_and_reapply_all
-    # Exclude reviewed transactions from reset
-    scope = Transaction.where.not(flag: 'Reviewed')
+    # Clear categories for transactions without category_manual_override
+    Transaction.where(category_manual_override: false).update_all(category: nil)
 
-    # Clear categories and flags for non-reviewed transactions
-    scope.update_all(category: nil, flag: nil)
+    # Clear flags for transactions without flag_manual_override
+    Transaction.where(flag_manual_override: false).update_all(flag: nil)
 
-    # Apply rules using optimized batch method (only to non-reviewed)
-    apply_rules_batch(scope)
+    # Apply rules (apply_rules_batch will respect the manual override flags)
+    apply_rules_batch
   end
 
   private

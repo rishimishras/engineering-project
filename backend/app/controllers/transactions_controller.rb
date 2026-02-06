@@ -1,7 +1,7 @@
 require 'csv'
 
 class TransactionsController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:create, :update, :destroy, :bulk_upload, :bulk_categorize]
+  skip_before_action :verify_authenticity_token, only: [:create, :update, :destroy, :bulk_upload, :bulk_categorize, :detect_anomalies]
 
   def index
     page = (params[:page] || 1).to_i
@@ -129,7 +129,13 @@ class TransactionsController < ApplicationController
 
   def update
     transaction = Transaction.find(params[:id])
-    if transaction.update(transaction_params)
+    update_params = transaction_params
+
+    # Set manual override flags based on what user is updating
+    update_params = update_params.merge(category_manual_override: true) if update_params[:category].present?
+    update_params = update_params.merge(flag_manual_override: true) if update_params[:flag].present?
+
+    if transaction.update(update_params)
       render json: transaction
     else
       render json: transaction.errors, status: :unprocessable_entity
@@ -150,8 +156,11 @@ class TransactionsController < ApplicationController
       return render json: { error: 'No transaction IDs provided' }, status: :unprocessable_entity
     end
 
-    updates = { category: category }
-    updates[:flag] = 'Reviewed' if category.present?
+    updates = { category: category, category_manual_override: true }
+    if category.present?
+      updates[:flag] = 'Reviewed'
+      updates[:flag_manual_override] = true
+    end
     updated_count = Transaction.where(id: ids).update_all(updates)
 
     render json: {
@@ -161,9 +170,21 @@ class TransactionsController < ApplicationController
     }, status: :ok
   end
 
+  def detect_anomalies
+    results = Transaction.detect_anomalies
+
+    render json: {
+      success: true,
+      message: "Anomaly detection completed",
+      duplicates_flagged: results[:duplicates],
+      recurring_flagged: results[:recurring],
+      total_flagged: results[:duplicates] + results[:recurring]
+    }, status: :ok
+  end
+
   private
 
   def transaction_params
-    params.require(:transaction).permit(:date, :description, :amount, :category, :flag)
+    params.require(:transaction).permit(:date, :description, :amount, :category, :flag, :category_manual_override, :flag_manual_override)
   end
 end

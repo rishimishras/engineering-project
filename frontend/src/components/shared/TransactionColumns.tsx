@@ -9,8 +9,8 @@ export type Column = {
 
 export function renderFlag(value: string): React.ReactNode {
   if (!value) value = 'Valid'
-  const redFlags = ['Suspicious', 'Urgent', 'Recurring']
-  const yellowFlags = ['Review Required', 'High Value']
+  const redFlags = ['Suspicious', 'Urgent']
+  const yellowFlags = ['Review Required', 'High Value', 'Recurring']
   const greenFlags = ['Valid']
 
   if (redFlags.includes(value)) return <span className="text-red-500">{value}</span>

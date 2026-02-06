@@ -108,9 +108,11 @@ class ProcessCsvUploadJob < ApplicationJob
       end
 
       # Apply category rules to newly uploaded transactions (using optimized batch method)
-      CategoryRule.apply_rules_batch(
-        Transaction.where('created_at >= ?', upload_start_time)
-      )
+      newly_uploaded = Transaction.where('created_at >= ?', upload_start_time)
+      CategoryRule.apply_rules_batch(newly_uploaded)
+
+      # Detect anomalies (duplicates and recurring transactions)
+      Transaction.detect_anomalies(newly_uploaded)
 
       # Mark as completed
       csv_upload.update!(

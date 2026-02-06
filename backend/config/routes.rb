@@ -16,6 +16,7 @@ Rails.application.routes.draw do
       get :stats
       post :bulk_upload
       patch :bulk_categorize
+      post :detect_anomalies
     end
   end
 
