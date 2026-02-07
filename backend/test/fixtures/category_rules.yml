@@ -1,0 +1,19 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  name: MyString
+  field: MyString
+  operator: MyString
+  value: MyString
+  category: MyString
+  priority: 1
+  active: false
+
+two:
+  name: MyString
+  field: MyString
+  operator: MyString
+  value: MyString
+  category: MyString
+  priority: 1
+  active: false
