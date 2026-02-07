@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import '@testing-library/jest-dom'
 
 // Mock window.matchMedia for components that use media queries
@@ -16,8 +17,10 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 // Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
+class ResizeObserverMock {
   observe() {}
   unobserve() {}
   disconnect() {}
 }
+
+window.ResizeObserver = ResizeObserverMock

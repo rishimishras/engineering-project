@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import Header from './Header'
+import Header from '../components/shared/Header'
 
 describe('Header', () => {
   // Rendering tests

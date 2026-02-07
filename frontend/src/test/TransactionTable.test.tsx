@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import Table, { Transaction, PaginationInfo } from './TransactionTable'
+import Table, { Transaction, PaginationInfo } from '../components/shared/TransactionTable'
 
 const mockTransactions: Transaction[] = [
   {

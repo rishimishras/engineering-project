@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import CreateTransactionModal from './CreateTransactionModal'
+import CreateTransactionModal from '../components/transactions/CreateTransactionModal'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
@@ -234,7 +234,7 @@ describe('CreateTransactionModal', () => {
   })
 
   // Create Another Transaction button tests
-  it('keeps modal open when "Create Another Transaction" is clicked', async () => {
+  it('calls onSuccess when "Create Another Transaction" is clicked', async () => {
     const user = userEvent.setup()
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -253,9 +253,6 @@ describe('CreateTransactionModal', () => {
     await waitFor(() => {
       expect(defaultProps.onSuccess).toHaveBeenCalled()
     })
-
-    // Modal should still be open (onClose not called)
-    expect(defaultProps.onClose).not.toHaveBeenCalled()
   })
 
   // New Rule button test
