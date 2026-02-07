@@ -30,8 +30,8 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [uploadFileProgress, setUploadFileProgress] = useState(0);
   const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSuccessfulRows = useRef<number>(0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -51,18 +51,20 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
       const data: UploadProgress = await response.json();
       setUploadProgress(data);
 
+      // Refresh transactions when new rows are successfully inserted
+      const currentSuccessful = data.successful_rows ?? 0;
+      if (currentSuccessful > lastSuccessfulRows.current) {
+        lastSuccessfulRows.current = currentSuccessful;
+        onSuccess();
+      }
+
       // Stop polling if completed or failed
       if (data.status === 'completed' || data.status === 'failed') {
         if (pollingInterval.current) {
           clearInterval(pollingInterval.current);
           pollingInterval.current = null;
         }
-
-        if (data.status === 'completed') {
-          setTimeout(() => {
-            onSuccess();
-          }, 2000);
-        }
+        lastSuccessfulRows.current = 0;
       }
     } catch (err) {
       console.error('Error polling progress:', err);
@@ -80,7 +82,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     setUploading(true);
     setError(null);
     setUploadProgress(null);
-    setUploadFileProgress(0);
+    lastSuccessfulRows.current = 0;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -90,12 +92,6 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
       const data = await new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            setUploadFileProgress(percent);
-          }
-        };
 
         xhr.onload = () => {
           try {
@@ -118,6 +114,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
       // Start polling for progress
       setUploadProgress(data);
+      setUploading(false);
       pollingInterval.current = setInterval(() => pollProgress(data.id), 1000);
 
     } catch (err) {
@@ -127,17 +124,41 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
   };
 
   const handleCloseModal = () => {
+    const isActiveUpload = uploading || (uploadProgress && (uploadProgress.status === 'pending' || uploadProgress.status === 'processing'));
+
+    // If upload is in progress, just close the modal but keep state and polling
+    if (isActiveUpload) {
+      onClose();
+      return;
+    }
+
+    // Upload completed or failed - clean up
     if (pollingInterval.current) {
       clearInterval(pollingInterval.current);
       pollingInterval.current = null;
     }
+    // Refresh transactions if an upload was started
+    if (uploadProgress) {
+      onSuccess();
+    }
+
     setFile(null);
     setError(null);
     setUploadProgress(null);
     setUploading(false);
-    setUploadFileProgress(0);
+    lastSuccessfulRows.current = 0;
     onClose();
   };
+
+  // Resume polling when modal reopens with an active upload
+  useEffect(() => {
+    if (isOpen && uploadProgress && !pollingInterval.current) {
+      const isActiveUpload = uploadProgress.status === 'pending' || uploadProgress.status === 'processing';
+      if (isActiveUpload) {
+        pollingInterval.current = setInterval(() => pollProgress(uploadProgress.id), 1000);
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {
@@ -214,117 +235,112 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
               </div>
             )}
 
-            {/* File Upload Progress */}
-            {uploading && uploadFileProgress < 100 && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-700 mb-2">Uploading file...</p>
-                <div className="h-2 w-full bg-gray-200 rounded">
-                  <div
-                    className="h-2 bg-blue-600 rounded transition-all"
-                    style={{ width: `${uploadFileProgress}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-600">{uploadFileProgress}%</p>
-              </div>
-            )}
-
-            {/* Processing Progress */}
-            {uploadProgress && (
+            {/* Progress Section - shows immediately when upload starts */}
+            {(uploading || uploadProgress) && (
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                  {!uploadProgress && 'Uploading file...'}
                   {isProcessing && 'Processing...'}
                   {isCompleted && 'Upload Complete'}
                   {isFailed && 'Upload Failed'}
                 </h3>
 
-                {isProcessing && (
+                {/* Progress bar - shows for uploading and processing */}
+                {(uploading || isProcessing) && (
                   <div className="mb-4">
                     <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
                       <div
                         className="h-3 bg-gray-900 transition-all duration-500"
-                        style={{ width: `${uploadProgress.progress ?? 0}%` }}
+                        style={{ width: `${uploadProgress?.progress ?? 0}%` }}
                       />
                     </div>
                     <p className="mt-2 text-sm text-gray-600">
-                      {(uploadProgress.progress ?? 0).toFixed(1)}% - Processed {(uploadProgress.processed_rows ?? 0).toLocaleString()} of {(uploadProgress.total_rows ?? 0).toLocaleString()} rows
+                      {!uploadProgress && 'Starting...'}
+                      {uploadProgress && isProcessing && `${(uploadProgress.progress ?? 0).toFixed(1)}% - Processed ${(uploadProgress.processed_rows ?? 0).toLocaleString()} of ${(uploadProgress.total_rows ?? 0).toLocaleString()} rows`}
                     </p>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                  <div>
-                    <span className="text-gray-600">Total Rows:</span>{' '}
-                    <span className="font-medium">{(uploadProgress.total_rows ?? 0).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Processed:</span>{' '}
-                    <span className="font-medium">{(uploadProgress.processed_rows ?? 0).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-green-600">Successful:</span>{' '}
-                    <span className="font-medium">{(uploadProgress.successful_rows ?? 0).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-red-600">Failed:</span>{' '}
-                    <span className="font-medium">{(uploadProgress.failed_rows ?? 0).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {isFailed && uploadProgress.error_message && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-sm text-red-800">{uploadProgress.error_message}</p>
-                  </div>
-                )}
-
-                {uploadProgress.error_details && uploadProgress.error_details.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
-                      Validation Errors (showing first {Math.min(10, uploadProgress.error_details.length)}):
-                    </p>
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {uploadProgress.error_details.slice(0, 10).map((errorDetail, idx) => (
-                        <div key={idx} className="text-xs bg-red-50 p-2 rounded border border-red-200">
-                          <div className="font-semibold text-red-900">Row {errorDetail.row}:</div>
-                          <div className="text-red-800">
-                            {errorDetail.errors.join(', ')}
-                          </div>
-                        </div>
-                      ))}
-                      {uploadProgress.error_details.length > 10 && (
-                        <p className="text-xs text-gray-600 italic">
-                          ... and {uploadProgress.error_details.length - 10} more errors
-                        </p>
-                      )}
+                {uploadProgress && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                      <div>
+                        <span className="text-gray-600">Total Rows:</span>{' '}
+                        <span className="font-medium">{(uploadProgress.total_rows ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Processed:</span>{' '}
+                        <span className="font-medium">{(uploadProgress.processed_rows ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-green-600">Successful:</span>{' '}
+                        <span className="font-medium">{(uploadProgress.successful_rows ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-red-600">Failed:</span>{' '}
+                        <span className="font-medium">{(uploadProgress.failed_rows ?? 0).toLocaleString()}</span>
+                      </div>
                     </div>
-                  </div>
-                )}
 
-                {isCompleted && (uploadProgress.failed_rows ?? 0) === 0 && (
-                  <div className="mt-3 p-2 bg-green-50 rounded border border-green-200">
-                    <p className="text-sm text-green-800">
-                      ✓ All {(uploadProgress.successful_rows ?? 0).toLocaleString()} transactions uploaded successfully!
-                    </p>
-                  </div>
+                    {isFailed && uploadProgress.error_message && (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+                        <p className="text-sm text-red-800">{uploadProgress.error_message}</p>
+                      </div>
+                    )}
+
+                    {uploadProgress.error_details && uploadProgress.error_details.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-gray-700 mb-2">
+                          Validation Errors (showing first {Math.min(10, uploadProgress.error_details.length)}):
+                        </p>
+                        <div className="max-h-60 overflow-y-auto space-y-2">
+                          {uploadProgress.error_details.slice(0, 10).map((errorDetail, idx) => (
+                            <div key={idx} className="text-xs bg-red-50 p-2 rounded border border-red-200">
+                              <div className="font-semibold text-red-900">Row {errorDetail.row}:</div>
+                              <div className="text-red-800">
+                                {errorDetail.errors.join(', ')}
+                              </div>
+                            </div>
+                          ))}
+                          {uploadProgress.error_details.length > 10 && (
+                            <p className="text-xs text-gray-600 italic">
+                              ... and {uploadProgress.error_details.length - 10} more errors
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {isCompleted && (uploadProgress.failed_rows ?? 0) === 0 && (
+                      <div className="mt-3 p-2 bg-green-50 rounded border border-green-200">
+                        <p className="text-sm text-green-800">
+                          ✓ All {(uploadProgress.successful_rows ?? 0).toLocaleString()} transactions uploaded successfully!
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
             <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                disabled={isProcessing}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {isCompleted || isFailed ? 'Close' : 'Cancel'}
-              </button>
-              {!uploadProgress && (
+              {/* Hide close button during processing - user can click outside to close */}
+              {!isProcessing && !uploading && (
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  {isCompleted || isFailed ? 'Close' : 'Cancel'}
+                </button>
+              )}
+              {!uploadProgress && !uploading && (
                 <button
                   type="submit"
-                  disabled={!file || uploading}
+                  disabled={!file}
                   className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {uploading ? 'Uploading...' : 'Upload'}
+                  Upload
                 </button>
               )}
             </div>

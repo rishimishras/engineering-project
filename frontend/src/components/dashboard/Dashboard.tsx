@@ -67,6 +67,7 @@ const FLAG_COLORS: Record<string, string> = {
   Recurring: '#8B5CF6',
   Valid: '#22C55E',
   None: '#6B7280',
+  Duplicate: '#DC2626'
 }
 
 function getColor(key: string, colorMap: Record<string, string>, index: number): string {

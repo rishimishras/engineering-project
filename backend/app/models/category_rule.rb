@@ -11,170 +11,103 @@ class CategoryRule < ApplicationRecord
 
   scope :active, -> { where(active: true) }
   scope :by_priority, -> { order(priority: :desc) }
+  scope :with_category, -> { where.not(category: [nil, '']) }
+  scope :with_flag, -> { where.not(flag: [nil, '']) }
+  scope :for_field, ->(field_name) { where(field: field_name) }
 
   def matches?(transaction)
-    case field
-    when 'description'
-      match_description(transaction.description)
-    when 'amount'
-      match_amount(transaction.amount)
-    else
-      false
-    end
+    send("match_#{field}", transaction.send(field))
   end
 
-  def self.apply_rules(transaction)
-    matching_rules = active.by_priority.select { |rule| rule.matches?(transaction) }
-
-    # For category: prefer description rules, then any rule with category
-    # Skip if category_manual_override is true
-    if transaction.category.blank? && !transaction.category_manual_override
-      category_rule = matching_rules.find { |rule| rule.field == 'description' && rule.category.present? }
-      category_rule ||= matching_rules.find { |rule| rule.category.present? }
-      transaction.category = category_rule.category if category_rule
-    end
-
-    # For flag: prefer amount rules that match the transaction's category, then any amount rule with flag
-    # Skip if flag_manual_override is true
-    if transaction.flag.blank? && !transaction.flag_manual_override
-      determined_category = transaction.category
-      flag_rule = matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? && rule.category == determined_category }
-      flag_rule ||= matching_rules.find { |rule| rule.field == 'amount' && rule.flag.present? }
-      flag_rule ||= matching_rules.find { |rule| rule.flag.present? }
-      transaction.flag = flag_rule.flag if flag_rule
-    end
+  def to_scope(base_scope)
+    send("build_#{field}_scope", base_scope)
   end
 
-  # Apply rules to transactions missing category or flag (OPTIMIZED with batch SQL)
-  def self.apply_to_uncategorized
-    apply_rules_batch(Transaction.where('category IS NULL OR category = ? OR flag IS NULL OR flag = ?', '', ''))
+  def keywords
+    @keywords ||= value.split(',').map { |v| v.strip.downcase }
   end
 
-  # Optimized batch rule application using SQL updates
-  def self.apply_rules_batch(scope = Transaction.all)
-    rules = active.by_priority.to_a
-    return 0 if rules.empty?
+  def threshold
+    @threshold ||= BigDecimal(value)
+  rescue ArgumentError
+    nil
+  end
 
-    updated_count = 0
+  def target_field
+    category.present? ? :category : :flag
+  end
 
-    # Apply category rules (description-based first, highest priority)
-    # Skip transactions with category_manual_override
-    category_rules = rules.select { |r| r.category.present? }
-    description_rules = category_rules.select { |r| r.field == 'description' }.sort_by { |r| -r.priority }
+  def target_value
+    category.present? ? category : flag
+  end
 
-    category_scope = scope.where(category_manual_override: false).where('category IS NULL OR category = ?', '')
-    description_rules.each do |rule|
-      count = apply_rule_batch(category_scope, rule, :category)
-      updated_count += count
+  class << self
+    def apply_rules(transaction)
+      CategoryRules::RuleApplicator.new.apply_to_transaction(transaction)
     end
 
-    # Apply flag rules (amount-based, highest priority)
-    # Skip transactions with flag_manual_override
-    flag_rules = rules.select { |r| r.flag.present? }
-    amount_rules = flag_rules.select { |r| r.field == 'amount' }.sort_by { |r| -r.priority }
-
-    flag_scope = scope.where(flag_manual_override: false).where('flag IS NULL OR flag = ?', '')
-    amount_rules.each do |rule|
-      count = apply_rule_batch(flag_scope, rule, :flag)
-      updated_count += count
+    def apply_rules_batch(scope = Transaction.all)
+      CategoryRules::RuleApplicator.new(scope).apply_all
     end
 
-    updated_count
-  end
-
-  # Apply a single rule to matching transactions in batch
-  def self.apply_rule_batch(scope, rule, field_to_update)
-    matching_scope = build_matching_scope(scope, rule)
-    return 0 if matching_scope.nil?
-
-    value_to_set = field_to_update == :category ? rule.category : rule.flag
-    matching_scope.update_all(field_to_update => value_to_set)
-  end
-
-  # Build SQL scope for matching transactions
-  def self.build_matching_scope(scope, rule)
-    case rule.field
-    when 'description'
-      case rule.operator
-      when 'contains'
-        keywords = rule.value.split(',').map(&:strip)
-        conditions = keywords.map { |kw| "LOWER(description) LIKE ?" }
-        values = keywords.map { |kw| "%#{kw.downcase}%" }
-        scope.where(conditions.join(' OR '), *values)
-      when 'equals'
-        keywords = rule.value.split(',').map(&:strip)
-        conditions = keywords.map { "LOWER(description) = ?" }
-        values = keywords.map { |kw| kw.downcase }
-        scope.where(conditions.join(' OR '), *values)
-      end
-    when 'amount'
-      threshold = BigDecimal(rule.value) rescue nil
-      return nil unless threshold
-
-      case rule.operator
-      when 'greater_than'
-        scope.where('amount > ?', threshold)
-      when 'less_than'
-        scope.where('amount < ?', threshold)
-      when 'equals'
-        scope.where(amount: threshold)
-      end
+    def apply_to_uncategorized
+      CategoryRules::RuleApplicator.new(Transaction.uncategorized.or(Transaction.unflagged)).apply_all
     end
-  end
 
-  def self.reset_and_reapply_all
-    # Clear categories for transactions without category_manual_override
-    Transaction.where(category_manual_override: false).update_all(category: nil)
-
-    # Clear flags for transactions without flag_manual_override
-    Transaction.where(flag_manual_override: false).update_all(flag: nil)
-
-    # Apply rules (apply_rules_batch will respect the manual override flags)
-    apply_rules_batch
+    def reset_and_reapply_all
+      CategoryRules::RuleApplicator.new.reset_and_reapply
+    end
   end
 
   private
 
   def match_description(description)
-    return false unless description.present?
+    return false if description.blank?
 
     desc_lower = description.downcase
-
     case operator
-    when 'contains'
-      # Support comma-separated values for contains
-      keywords = value.split(',').map(&:strip).map(&:downcase)
-      keywords.any? { |keyword| desc_lower.include?(keyword) }
-    when 'equals'
-      keywords = value.split(',').map(&:strip).map(&:downcase)
-      keywords.any? { |keyword| desc_lower == keyword }
-    else
-      false
+    when 'contains' then keywords.any? { |kw| desc_lower.include?(kw) }
+    when 'equals' then keywords.any? { |kw| desc_lower == kw }
+    else false
     end
   end
 
   def match_amount(amount)
-    return false unless amount.present?
-
-    threshold = BigDecimal(value)
+    return false if amount.blank? || threshold.nil?
 
     case operator
-    when 'greater_than'
-      amount > threshold
-    when 'less_than'
-      amount < threshold
-    when 'equals'
-      amount == threshold
-    else
-      false
+    when 'greater_than' then amount > threshold
+    when 'less_than' then amount < threshold
+    when 'equals' then amount == threshold
+    else false
     end
-  rescue ArgumentError
-    false
+  end
+
+  def build_description_scope(base_scope)
+    case operator
+    when 'contains'
+      conditions = keywords.map { "LOWER(description) LIKE ?" }
+      values = keywords.map { |kw| "%#{kw}%" }
+      base_scope.where(conditions.join(' OR '), *values)
+    when 'equals'
+      conditions = keywords.map { "LOWER(description) = ?" }
+      base_scope.where(conditions.join(' OR '), *keywords)
+    end
+  end
+
+  def build_amount_scope(base_scope)
+    return nil unless threshold
+
+    case operator
+    when 'greater_than' then base_scope.where('amount > ?', threshold)
+    when 'less_than' then base_scope.where('amount < ?', threshold)
+    when 'equals' then base_scope.where(amount: threshold)
+    end
   end
 
   def must_have_category_or_flag
-    if category.blank? && flag.blank?
-      errors.add(:base, 'Must assign either a category or a flag')
-    end
+    return unless category.blank? && flag.blank?
+
+    errors.add(:base, 'Must assign either a category or a flag')
   end
 end
